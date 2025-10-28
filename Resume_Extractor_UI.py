@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import os
-from Resume_Extractor import extract_skills_from_resume, extract_jd_with_genai, calculate_matching_percentage
+from Resume_Extractor import extract_skills_from_resume, extract_jd_with_genai, calculate_matching_percentage, check_experience_match
 
 class ResumeExtractorUI:
     def __init__(self, root):
@@ -225,6 +225,16 @@ class ResumeExtractorUI:
             ttk.Label(jd_skills_frame, text=f"Non-mandatory Certifications: {', '.join(jd_non_mand_certs)}", font=("Arial", 10)).pack(anchor=tk.W)
         else:
             ttk.Label(jd_skills_frame, text="Non-mandatory Certifications: None", font=("Arial", 10)).pack(anchor=tk.W)
+
+        # Experience Match Result
+        exp_match_frame = ttk.LabelFrame(self.results_container, text="Experience Match Result", padding=10)
+        exp_match_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        exp_matches = check_experience_match(self.resume_data, self.jd_data)
+        if exp_matches:
+            ttk.Label(exp_match_frame, text="Experience Matches", font=("Arial", 10, "bold"), foreground="green").pack(anchor=tk.W)
+        else:
+            ttk.Label(exp_match_frame, text="Doesn't match Experience", font=("Arial", 10, "bold"), foreground="red").pack(anchor=tk.W)
 
         # ...existing code...
 

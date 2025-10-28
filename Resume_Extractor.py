@@ -1,3 +1,4 @@
+import ast
 import json
 import os
 import requests
@@ -52,6 +53,7 @@ def call_azure_document_intelligence(file_path):
     endpoint = "xyz"
     key = "xyz"
     model_id = "skills_resume_extractor_1"
+
     headers = {
         "Ocp-Apim-Subscription-Key": key,
         "Content-Type": "application/octet-stream"
@@ -277,6 +279,42 @@ def extract_jd_with_genai(job_description):
         print("GenAI extraction error:", e)
         return default_result
 
+
+def check_experience_match(resume_data, jd_data):
+    """Check if resume experience matches JD experience requirement"""
+    resume_exp = resume_data.get("experience", "").lower()
+    jd_exp = jd_data.get("years_experience", "").lower()
+    
+    if not resume_exp or not jd_exp:
+        return False
+    
+    import re
+    resume_nums = re.findall(r'\d+', resume_exp)
+    if not resume_nums:
+        return False
+    
+    resume_years = int(resume_nums[0])
+    
+    # Case 3: Check for "+" pattern (e.g., "9+")
+    if '+' in jd_exp:
+        jd_min = re.findall(r'\d+', jd_exp)
+        if jd_min:
+            return resume_years > int(jd_min[0])
+    
+    # Case 2: Check for range pattern (e.g., "3-5")
+    if '-' in jd_exp:
+        jd_nums = re.findall(r'\d+', jd_exp)
+        if len(jd_nums) >= 2:
+            jd_min, jd_max = int(jd_nums[0]), int(jd_nums[1])
+            return jd_min <= resume_years <= jd_max
+    
+    # Case 1: Single number with 0.5 threshold
+    jd_nums = re.findall(r'\d+', jd_exp)
+    if jd_nums:
+        jd_years = int(jd_nums[0])
+        return abs(resume_years - jd_years) <= 0.5
+    
+    return False
 
 def calculate_matching_percentage(resume_data, jd_data):
     """Calculate matching percentage between resume and job description"""
