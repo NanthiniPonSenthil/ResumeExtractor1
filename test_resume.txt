@@ -1,0 +1,22 @@
+
+John Doe
+Senior Software Engineer
+Email: john.doe@email.com
+Phone: +1234567890
+
+EXPERIENCE:
+- 5+ years of experience in software development
+- Senior Developer at TechCorp (2019-2024)
+- Software Engineer at StartupXYZ (2017-2019)
+
+SKILLS:
+- Python, Java, C#
+- AWS, Azure, Docker
+- React, Angular, Node.js
+- SQL Server, MongoDB
+- Git, CI/CD, Agile
+
+CERTIFICATIONS:
+- AWS Certified Solutions Architect
+- Microsoft Azure Developer Associate
+- Scrum Master Certified

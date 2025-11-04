@@ -52,7 +52,7 @@ def call_azure_document_intelligence(file_path):
     """Send document to Azure Document Intelligence for skills and certifications extraction"""
     endpoint = "xyz"
     key = "xyz"
-    model_id = "skills_resume_extractor_1"
+    model_id = "skill_resume_extractor_2"
 
     headers = {
         "Ocp-Apim-Subscription-Key": key,
@@ -113,19 +113,23 @@ def parse_document_intelligence_response(response):
             for skill_item in value_array:
                 if skill_item.get("type") == "object":
                     value_object = skill_item.get("valueObject", {})
-                    skill_field = value_object.get("skill", {})
-                    if skill_field:
-                        skill_value = skill_field.get("valueString", "")
-                        if skill_value:
-                            skills.append(skill_value)
+                    for category, category_data in value_object.items():
+                        if isinstance(category_data, dict) and category_data.get("valueString"):
+                            skill_text = category_data.get("valueString", "").strip()
+                            if skill_text:
+                                individual_skills = [s.strip() for s in skill_text.split(',') if s.strip()]
+                                skills.extend(individual_skills)
         
         certifications = []
         cert_field = fields.get("Certifications", {})
         if cert_field and cert_field.get("type") == "object":
             value_object = cert_field.get("valueObject", {})
-            for cert_key, cert_value in value_object.items():
-                if cert_value.get("valueString"):
-                    certifications.append(cert_value.get("valueString"))
+            for row_key, row_data in value_object.items():
+                if row_key.startswith("ROW") and isinstance(row_data, dict):
+                    row_value_object = row_data.get("valueObject", {})
+                    cert_data = row_value_object.get("CERTIFICATIONS", {})
+                    if cert_data and cert_data.get("valueString"):
+                        certifications.append(cert_data.get("valueString"))
         
         return {
             "name": name,
@@ -279,7 +283,19 @@ def extract_jd_with_genai(job_description):
         print("GenAI extraction error:", e)
         return default_result
 
+def extract_jd_with_genai1(job_description):
+        # Default structure
+    default_result = {
+        "years_experience": "9 years",
+        "mandatory_skills": ["C#", "ASP.NET Core", "Entity Framework", "SQL Server"],
+        "non_mandatory_skills": ["Angular", "Azure DevOps", "Microservices"],
+        "mandatory_certifications": ["Microsoft Certified: Azure Developer Associate"],
+        "non_mandatory_certifications": ["Scrum Master Certified"]
+    }
 
+    # ✅ Return directly since Gemini quota exceeded
+    return default_result
+    
 def check_experience_match(resume_data, jd_data):
     """Check if resume experience matches JD experience requirement"""
     resume_exp = resume_data.get("experience", "").lower()
