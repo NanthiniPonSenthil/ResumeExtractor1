@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import os
-from Resume_Extractor import extract_skills_from_resume, extract_jd_with_genai, calculate_matching_percentage, check_experience_match, get_skills_vectors, analyze_skill_matching
+from Resume_Extractor import extract_skills_from_resume, extract_jd_with_genai, calculate_matching_percentage, check_experience_match, get_skills_vectors, analyze_skill_matching, calculate_match_score
 
 class ResumeExtractorUI:
     def __init__(self, root):
@@ -322,6 +322,33 @@ class ResumeExtractorUI:
         if missing_certs:
             ttk.Label(analysis_frame, text=f"Missing Certifications: {', '.join(missing_certs)}", 
                      font=("Arial", 10), foreground="red").pack(anchor=tk.W, pady=(2,0))
+
+        # Calculate and display match score
+        if matching_result["status"] == "All mandatory requirements matched":
+            # Count matched items
+            matched_skills = len(matched_mandatory_skills) + len(matched_optional_skills)
+            matched_certifications = len(matched_mandatory_certs) + len(matched_optional_certs)
+            
+            # Count total requirements
+            total_skills = len(self.jd_data.get("mandatory_skills", [])) + len(self.jd_data.get("non_mandatory_skills", []))
+            total_certifications = len(self.jd_data.get("mandatory_certifications", [])) + len(self.jd_data.get("non_mandatory_certifications", []))
+            
+            if total_skills > 0 or total_certifications > 0:
+                match_score = calculate_match_score(matched_skills, total_skills, matched_certifications, total_certifications)
+                
+                # Display score prominently
+                score_frame = ttk.LabelFrame(self.results_container, text="Final Match Score", padding=10)
+                score_frame.pack(fill=tk.X, padx=10, pady=10)
+                
+                score_label = ttk.Label(score_frame, text=f"Match Score: {match_score:.1f}%", 
+                                      font=("Arial", 14, "bold"), foreground="darkgreen")
+                score_label.pack(anchor=tk.W)
+                
+                # Add breakdown
+                ttk.Label(score_frame, text=f"Skills matched: {matched_skills}/{total_skills}", 
+                         font=("Arial", 10)).pack(anchor=tk.W, pady=(2,0))
+                ttk.Label(score_frame, text=f"Certifications matched: {matched_certifications}/{total_certifications}", 
+                         font=("Arial", 10)).pack(anchor=tk.W, pady=(2,0))
 
         # ...existing code...
 

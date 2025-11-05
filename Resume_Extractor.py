@@ -21,7 +21,6 @@ def convert_to_pdf(file_path):
     """Convert various file formats to PDF for Document Intelligence processing"""
     base_name = os.path.splitext(file_path)[0]
     pdf_path = f"{base_name}.pdf"
-    
     if file_path.lower().endswith('.txt'):
         # Convert text file to PDF
         with open(file_path, 'r', encoding='utf-8') as file:
@@ -499,3 +498,21 @@ def analyze_skill_matching(vectors_result):
         
     except Exception as e:
         return {"error": str(e)}
+
+def calculate_match_score(matched_skills, total_skill_requirements, matched_certifications, total_cert_requirements):
+    """Calculate final match score based on skills and certifications"""
+    # Calculate skill match ratio
+    skill_match = matched_skills / total_skill_requirements if total_skill_requirements > 0 else 0
+    
+    # Calculate certification match ratio
+    cert_match = matched_certifications / total_cert_requirements if total_cert_requirements > 0 else 0
+    
+    # Calculate weights
+    skill_weight = total_skill_requirements / (total_skill_requirements + total_cert_requirements)
+    cert_weight = total_cert_requirements / (total_skill_requirements + total_cert_requirements)
+    
+    # Calculate final match score
+    final_match_score = (skill_match * skill_weight) + (cert_match * cert_weight)
+    match_percentage = final_match_score * 100
+    
+    return match_percentage
