@@ -7,10 +7,15 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from docx import Document
 import google.generativeai as genai
+import openai
+from openai import AzureOpenAI
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+
 
 # Hardcode OpenAI credentials here (replace with your key/endpoint)
 OPENAI_API_KEY = "xyz"
-OPENAI_API_BASE = ""  # e.g. "https://api.openai.com/v1" or leave empty to use default
+OPENAI_ENDPOINT = "xyz"
 
 def convert_to_pdf(file_path):
     """Convert various file formats to PDF for Document Intelligence processing"""
@@ -350,3 +355,147 @@ def calculate_matching_percentage(resume_data, jd_data):
         "matched_skills": list(resume_skills.intersection(jd_skills)),
         "missing_skills": list(jd_skills - resume_skills)
     }
+
+def get_skills_vectors(resume_data, jd_data):
+    """Get OpenAI embeddings for skills and certifications from resume and JD"""
+    try:
+        resume_skills = resume_data.get("skills", [])
+        resume_certifications = resume_data.get("certifications", [])
+        mandatory_skills = jd_data.get("mandatory_skills", [])
+        optional_skills = jd_data.get("non_mandatory_skills", [])
+        mandatory_certifications = jd_data.get("mandatory_certifications", [])
+        optional_certifications = jd_data.get("non_mandatory_certifications", [])
+        
+        all_items = (resume_skills + resume_certifications + mandatory_skills + 
+                    optional_skills + mandatory_certifications + optional_certifications)
+        
+        if not all_items:
+            return {"error": "No skills or certifications found"}
+
+        client = AzureOpenAI(
+            azure_endpoint=OPENAI_ENDPOINT,
+            api_key=OPENAI_API_KEY,
+            api_version="2024-12-01-preview"
+        )
+
+        response = client.embeddings.create(
+            model="text-embedding-3-large",
+            input=all_items
+        )
+        embeddings = [item.embedding for item in response.data]
+
+        resume_skills_end = len(resume_skills)
+        resume_certs_end = resume_skills_end + len(resume_certifications)
+        mandatory_skills_end = resume_certs_end + len(mandatory_skills)
+        optional_skills_end = mandatory_skills_end + len(optional_skills)
+        mandatory_certs_end = optional_skills_end + len(mandatory_certifications)
+
+        return {
+            "resume_skills": resume_skills,
+            "resume_certifications": resume_certifications,
+            "mandatory_skills": mandatory_skills,
+            "optional_skills": optional_skills,
+            "mandatory_certifications": mandatory_certifications,
+            "optional_certifications": optional_certifications,
+            "resume_skills_vectors": embeddings[:resume_skills_end],
+            "resume_certs_vectors": embeddings[resume_skills_end:resume_certs_end],
+            "mandatory_skills_vectors": embeddings[resume_certs_end:mandatory_skills_end],
+            "optional_skills_vectors": embeddings[mandatory_skills_end:optional_skills_end],
+            "mandatory_certs_vectors": embeddings[optional_skills_end:mandatory_certs_end],
+            "optional_certs_vectors": embeddings[mandatory_certs_end:]
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+def analyze_skill_matching(vectors_result):
+    """Analyze skill and certification matching using cosine similarity"""
+    try:
+        # Check if mandatory skills exist
+        if not vectors_result.get("mandatory_skills_vectors") or len(vectors_result["mandatory_skills_vectors"]) == 0:
+            return {"status": "No mandatory skills to check", "matched_skills": []}
+        
+        # Check if resume has any skills
+        if not vectors_result.get("resume_skills_vectors") or len(vectors_result["resume_skills_vectors"]) == 0:
+            return {"status": "No resume skills to check", "matched_skills": []}
+        
+        resume_vectors = np.array(vectors_result["resume_skills_vectors"])
+        mandatory_vectors = np.array(vectors_result["mandatory_skills_vectors"])
+        mandatory_skills = vectors_result.get("mandatory_skills", [])
+        
+        # Calculate cosine similarity for mandatory skills vs resume skills
+        mandatory_similarities = cosine_similarity(mandatory_vectors, resume_vectors)
+        mandatory_max_scores = np.max(mandatory_similarities, axis=1)
+        
+        # Find mandatory skills with low similarity (< 0.5)
+        missing_skills = []
+        for i, similarity_score in enumerate(mandatory_max_scores):
+            if similarity_score < 0.5 and i < len(mandatory_skills):
+                missing_skills.append(mandatory_skills[i])
+        
+        # Return early if any mandatory skills are missing
+        if missing_skills:
+            return {
+                "status": "Mandatory Skills missing", 
+                "matched_skills": [],
+                "missing_skills": missing_skills
+            }
+        
+        # Process mandatory certifications
+        mandatory_certs_vectors = vectors_result.get("mandatory_certs_vectors", [])
+        mandatory_certifications = vectors_result.get("mandatory_certifications", [])
+        
+        if mandatory_certs_vectors and vectors_result.get("resume_certs_vectors"):
+            resume_certs_vectors = np.array(vectors_result["resume_certs_vectors"])
+            mandatory_certs_similarities = cosine_similarity(np.array(mandatory_certs_vectors), resume_certs_vectors)
+            mandatory_certs_max_scores = np.max(mandatory_certs_similarities, axis=1)
+            
+            missing_certifications = []
+            for i, similarity_score in enumerate(mandatory_certs_max_scores):
+                if similarity_score < 0.5 and i < len(mandatory_certifications):
+                    missing_certifications.append(mandatory_certifications[i])
+            
+            if missing_certifications:
+                return {
+                    "status": "Mandatory Certifications missing",
+                    "matched_mandatory_skills": mandatory_skills,
+                    "missing_certifications": missing_certifications
+                }
+        
+        # Process optional skills
+        optional_skills_vectors = vectors_result.get("optional_skills_vectors", [])
+        optional_skills = vectors_result.get("optional_skills", [])
+        matched_optional_skills = []
+        
+        if optional_skills_vectors:
+            optional_similarities = cosine_similarity(np.array(optional_skills_vectors), resume_vectors)
+            optional_max_scores = np.max(optional_similarities, axis=1)
+            
+            for i, similarity_score in enumerate(optional_max_scores):
+                if similarity_score >= 0.5 and i < len(optional_skills):
+                    matched_optional_skills.append(optional_skills[i])
+        
+        # Process optional certifications
+        optional_certs_vectors = vectors_result.get("optional_certs_vectors", [])
+        optional_certifications = vectors_result.get("optional_certifications", [])
+        matched_optional_certs = []
+        
+        if optional_certs_vectors and vectors_result.get("resume_certs_vectors"):
+            resume_certs_vectors = np.array(vectors_result["resume_certs_vectors"])
+            optional_certs_similarities = cosine_similarity(np.array(optional_certs_vectors), resume_certs_vectors)
+            optional_certs_max_scores = np.max(optional_certs_similarities, axis=1)
+            
+            for i, similarity_score in enumerate(optional_certs_max_scores):
+                if similarity_score >= 0.5 and i < len(optional_certifications):
+                    matched_optional_certs.append(optional_certifications[i])
+        
+        return {
+            "status": "All mandatory requirements matched",
+            "matched_mandatory_skills": mandatory_skills,
+            "matched_mandatory_certifications": mandatory_certifications,
+            "matched_optional_skills": matched_optional_skills,
+            "matched_optional_certifications": matched_optional_certs
+        }
+        
+    except Exception as e:
+        return {"error": str(e)}

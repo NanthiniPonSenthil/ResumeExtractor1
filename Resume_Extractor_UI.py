@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import os
-from Resume_Extractor import extract_skills_from_resume, extract_jd_with_genai, calculate_matching_percentage, check_experience_match
+from Resume_Extractor import extract_skills_from_resume, extract_jd_with_genai, calculate_matching_percentage, check_experience_match, get_skills_vectors, analyze_skill_matching
 
 class ResumeExtractorUI:
     def __init__(self, root):
@@ -58,7 +58,11 @@ class ResumeExtractorUI:
         
         self.process_button = ttk.Button(process_frame, text="Extract Skills & Calculate Match", 
                                        command=self.process_documents, style="Accent.TButton")
-        self.process_button.pack(side=tk.RIGHT)
+        self.process_button.pack(side=tk.RIGHT, padx=(5, 0))
+        
+        self.vectors_button = ttk.Button(process_frame, text="Get Vectors", 
+                                       command=self.get_vectors)
+        self.vectors_button.pack(side=tk.RIGHT)
         
         # Progress bar
         self.progress = ttk.Progressbar(process_frame, mode='indeterminate')
@@ -140,7 +144,8 @@ class ResumeExtractorUI:
                 "mandatory_certifications": jd_llm.get("mandatory_certifications", []),
                 "optional_certifications": jd_llm.get("non_mandatory_certifications", []),
                 "mandatory_skills": jd_llm.get("mandatory_skills", []),
-                "non_mandatory_skills": jd_llm.get("non_mandatory_skills", [])
+                "non_mandatory_skills": jd_llm.get("non_mandatory_skills", []),
+                "non_mandatory_certifications": jd_llm.get("non_mandatory_certifications", [])
             }
             
             # Calculate matching
@@ -235,6 +240,88 @@ class ResumeExtractorUI:
             ttk.Label(exp_match_frame, text="Experience Matches", font=("Arial", 10, "bold"), foreground="green").pack(anchor=tk.W)
         else:
             ttk.Label(exp_match_frame, text="Doesn't match Experience", font=("Arial", 10, "bold"), foreground="red").pack(anchor=tk.W)
+
+    def get_vectors(self):
+        if not self.resume_data or not self.jd_data:
+            messagebox.showerror("Error", "Please process documents first.")
+            return
+        
+        try:
+            vectors_result = get_skills_vectors(self.resume_data, self.jd_data)
+            
+            if "error" in vectors_result:
+                messagebox.showerror("Error", f"Vector generation failed: {vectors_result['error']}")
+                return
+            
+            # Analyze skill matching
+            matching_result = analyze_skill_matching(vectors_result)
+            
+            if "error" in matching_result:
+                messagebox.showerror("Error", f"Analysis failed: {matching_result['error']}")
+                return
+            
+            # Display result in the results tab
+            self.display_skill_analysis(matching_result)
+            self.notebook.select(self.results_frame)
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Vector generation failed: {str(e)}")
+
+    def display_skill_analysis(self, matching_result):
+        # Add skill analysis to results
+        analysis_frame = ttk.LabelFrame(self.results_container, text="Skill Analysis", padding=10)
+        analysis_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        # Status
+        ttk.Label(analysis_frame, text=matching_result["status"], font=("Arial", 10, "bold")).pack(anchor=tk.W)
+        
+        # Matched Mandatory Skills
+        matched_mandatory_skills = matching_result.get("matched_mandatory_skills", [])
+        if matched_mandatory_skills:
+            ttk.Label(analysis_frame, text=f"Matched Mandatory Skills: {', '.join(matched_mandatory_skills)}", 
+                     font=("Arial", 10), foreground="green").pack(anchor=tk.W, pady=(5,0))
+        else:
+            ttk.Label(analysis_frame, text="Matched Mandatory Skills: None", 
+                     font=("Arial", 10), foreground="orange").pack(anchor=tk.W, pady=(5,0))
+        
+        # Matched Mandatory Certifications  
+        matched_mandatory_certs = matching_result.get("matched_mandatory_certifications", [])
+        if matched_mandatory_certs:
+            ttk.Label(analysis_frame, text=f"Matched Mandatory Certifications: {', '.join(matched_mandatory_certs)}", 
+                     font=("Arial", 10), foreground="green").pack(anchor=tk.W, pady=(2,0))
+        else:
+            ttk.Label(analysis_frame, text="Matched Mandatory Certifications: None", 
+                     font=("Arial", 10), foreground="orange").pack(anchor=tk.W, pady=(2,0))
+        
+        # Matched Optional Skills
+        matched_optional_skills = matching_result.get("matched_optional_skills", [])
+        if matched_optional_skills:
+            ttk.Label(analysis_frame, text=f"Matched Optional Skills: {', '.join(matched_optional_skills)}", 
+                     font=("Arial", 10), foreground="blue").pack(anchor=tk.W, pady=(2,0))
+        else:
+            ttk.Label(analysis_frame, text="Matched Optional Skills: None", 
+                     font=("Arial", 10), foreground="gray").pack(anchor=tk.W, pady=(2,0))
+        
+        # Matched Optional Certifications
+        matched_optional_certs = matching_result.get("matched_optional_certifications", [])
+        if matched_optional_certs:
+            ttk.Label(analysis_frame, text=f"Matched Optional Certifications: {', '.join(matched_optional_certs)}", 
+                     font=("Arial", 10), foreground="blue").pack(anchor=tk.W, pady=(2,0))
+        else:
+            ttk.Label(analysis_frame, text="Matched Optional Certifications: None", 
+                     font=("Arial", 10), foreground="gray").pack(anchor=tk.W, pady=(2,0))
+        
+        # Missing Skills (if any)
+        missing_skills = matching_result.get("missing_skills", [])
+        if missing_skills:
+            ttk.Label(analysis_frame, text=f"Missing Skills: {', '.join(missing_skills)}", 
+                     font=("Arial", 10), foreground="red").pack(anchor=tk.W, pady=(2,0))
+        
+        # Missing Certifications (if any)
+        missing_certs = matching_result.get("missing_certifications", [])
+        if missing_certs:
+            ttk.Label(analysis_frame, text=f"Missing Certifications: {', '.join(missing_certs)}", 
+                     font=("Arial", 10), foreground="red").pack(anchor=tk.W, pady=(2,0))
 
         # ...existing code...
 

@@ -3,3 +3,5 @@ docx2pdf
 reportlab
 python-docx
 genai
+openai>=1.0.0
+azure-core>=1.26.0
